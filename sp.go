@@ -11,16 +11,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
+	"time"
 
-	saml2 "github.com/russellhaering/gosaml2"
+	saml2 "github.com/ondbyte/samlmux/saml2"
+	"github.com/ondbyte/samlmux/saml2/uuid"
 	dsig "github.com/russellhaering/goxmldsig"
 )
+
+type AfterAcsRedirect func(w http.ResponseWriter, r *http.Request, data string)
 
 type ServiceProvider struct {
 	*tls.Certificate
 	*saml2.SAMLServiceProvider
+	afterAcsRedirect AfterAcsRedirect
 	*log.Logger
 }
 
@@ -36,7 +40,7 @@ func (sp *ServiceProvider) signatureOf(dataToVerifyStr string) (string, error) {
 	}
 	headerStr := base64.StdEncoding.EncodeToString(headerBytes)
 	// Sign the token.
-	hash := hmac.New(sha256.New, sp.PrivateKey.(rsa.PrivateKey).N.Bytes())
+	hash := hmac.New(sha256.New, sp.PrivateKey.(*rsa.PrivateKey).N.Bytes())
 	hash.Write([]byte(headerStr + "." + dataToVerifyStr))
 
 	signature := base64.StdEncoding.EncodeToString(hash.Sum(nil))
@@ -49,32 +53,12 @@ func (sp *ServiceProvider) HandleSamlAuth(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	redirectTo := r.URL.Query().Get("redirectTo")
-	if redirectTo == "" {
-		redirectTo = r.URL.Query().Get("redirect_to")
-	}
-	if redirectTo == "" {
-		http.Error(w, "error:see server logs", http.StatusTeapot)
-		sp.Println("ServiceProvider.HandleSamlAuth expects request to contain a param named either 'redirect_to' or 'redirectTo' to be present")
-		return
-	}
-	redirectToUrl, err := url.Parse(redirectTo)
-	if err != nil {
-		sp.Println(
-			"ServiceProvider.HandleSamlAuth expects request the'redirect_to' or 'redirectTo' param to be a valid URL," +
-				"the param value is: " +
-				redirectTo,
-		)
-		http.Error(w, "error:see server logs", http.StatusTeapot)
-		return
-	}
-
 	// as relayState cannot be more than 80 bytes, we will set cookie with the data and key of the
 	// cookie as the relayState, relaystate will be the signature of the data in the cookie
 
 	// data we weill verify in the acs callback
 	dataToVerify := map[string]string{
-		"redirect_to": redirectToUrl.String(),
+		"uuid": uuid.NewV4().String(),
 	}
 	dataToVerifyBytes, err := json.Marshal(dataToVerify)
 	if err != nil {
@@ -181,15 +165,58 @@ func (sp *ServiceProvider) HandleAcs(
 	if err != nil {
 		panic(err)
 	}
-	onSuccess(w, r, string(b))
+	sp.afterAcsRedirect(w, r, string(b))
 }
 
+func (sp *ServiceProvider) MetadataStr() (string, error) {
+	// TODO MetaDataWithSLO parameter requires a name fix
+	md, err := sp.MetadataWithSLO(time.Duration(int64(time.Hour) * 24 * 14)) //14 days
+	if err != nil {
+		return "", err
+	}
+	mdBytes, err := xml.Marshal(md)
+	if err != nil {
+		return "", err
+	}
+	return string(mdBytes), nil
+}
+
+func (sp *ServiceProvider) HandleMetaData(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	mdStr, err := sp.MetadataStr()
+	if err != nil {
+		http.Error(w, "see server logs", http.StatusInternalServerError)
+		sp.Println("error calling xml.Marshal on metadata")
+		sp.Println(err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/xml")
+	w.Write([]byte(mdStr))
+}
+
+// entityId is the entityId in our metadata.
+//
 // acsUrl: most of the time https://<entityId>/saml/acs
+//
+// logoutUrl will be where a user can initiate logout
+//
+// cert
+//
+// idpMetaData is the metdata of the idp (ex: AZURE,okta)
+//
+// afterAcsRedirect is the redirect handler once the SAML ACS is done.
+// if the SAML ACS is successful the data variable will be non nil, using this data you can issue a token and then lead
+// the browser to a URL
 func NewServiceProvider(
 	entityId string,
 	acsUrl string,
+	logoutUrl string,
 	cert *tls.Certificate,
 	idpMetadata *MetaData,
+	afterAcsRedirect AfterAcsRedirect,
+	logger *log.Logger,
 ) (
 	*ServiceProvider,
 	error,
@@ -212,8 +239,11 @@ func NewServiceProvider(
 			IDPCertificateStore:         idpCertStore,
 			SPKeyStore:                  dsig.TLSCertKeyStore(*cert),
 			AssertionConsumerServiceURL: acsUrl,
+			SignAuthnRequests:           true,
+			ServiceProviderSLOURL:       logoutUrl,
 		},
-		Logger:      log.Default(),
-		Certificate: cert,
+		Logger:           logger,
+		Certificate:      cert,
+		afterAcsRedirect: afterAcsRedirect,
 	}, nil
 }

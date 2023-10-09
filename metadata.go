@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
-	"github.com/russellhaering/gosaml2/types"
+	"github.com/ondbyte/samlmux/saml2/types"
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
@@ -64,7 +65,7 @@ func (md *MetaData) IdpCertStore() (*dsig.MemoryX509CertificateStore, error) {
 			if xcert.Data == "" {
 				return nil, fmt.Errorf("metadata certificate(%d) must not be empty", idx)
 			}
-			certData, err := base64.StdEncoding.DecodeString(xcert.Data)
+			certData, err := base64.StdEncoding.DecodeString(strings.TrimSpace(xcert.Data))
 			if err != nil {
 				return nil, err
 			}
