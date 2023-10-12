@@ -66,7 +66,7 @@ func samlTestIdMetaData() *samlmux.MetaData {
 }
 
 func idpMetaDataFromFile() *samlmux.MetaData {
-	idpMetaData, err := samlmux.NewMetDataFromFile("./idp_metadata.xml")
+	idpMetaData, err := samlmux.NewMetDataFromFile("./example_idp_metadata.xml")
 	if err != nil {
 		panic(err)
 	}
@@ -77,14 +77,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	samlservice, err := samlmux.NewServiceProvider(
-		addressOfOurService,
-		fmt.Sprintf("%v%v", addressOfOurService, acsPath),
-		fmt.Sprintf("%v%v", addressOfOurService, logoutPath),
-		&c,
-		samlTestIdMetaData(),
-		onAuthFlowDone,
-		log.Default(),
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("samlmux example service"))
+	})
+	samlservice := samlmux.NewServiceProviderWithOption(
+		&samlmux.ServiceProviderOptions{
+			ServiceRunsAt: "https://localhost:3000",
+			SsoPath:       "/saml/sso",
+			AcsPath:       "/saml/acs",
+			SloPath:       "/saml/slo",
+			Cert:          &c,
+			IdpMetadata:   idpMetaDataFromFile(),
+			Logger:        log.Default(),
+		},
 	)
 
 	if err != nil {
@@ -96,7 +101,7 @@ func main() {
 		panic(err)
 	}
 
-	file, err := os.Create("./our_metadata.xml")
+	file, err := os.Create("./example_sp_metadata.xml")
 	if err != nil {
 		panic(err)
 	}
@@ -105,16 +110,7 @@ func main() {
 		panic(err)
 	}
 	file.Close()
-	mux := http.DefaultServeMux
-	mux.HandleFunc(metaDataPath, func(w http.ResponseWriter, r *http.Request) {
-		samlservice.HandleMetaData(w, r)
-	})
-	mux.HandleFunc(acsPath, func(w http.ResponseWriter, r *http.Request) {
-		samlservice.HandleAcs(w, r)
-	})
-
-	mux.HandleFunc(loginPath, func(w http.ResponseWriter, r *http.Request) {
-		samlservice.HandleSamlAuth(w, r)
-	})
-	http.ListenAndServeTLS(":3000", "./example.cert", "./example.key", mux)
+	fmt.Println(`example: written sp meta data to file 'example_sp_metadata.xml' also consult the metadata url for the same`)
+	fmt.Printf("login at %v%v", addressOfOurService, loginPath)
+	http.ListenAndServeTLS(":3000", "./example.cert", "./example.key", samlservice)
 }

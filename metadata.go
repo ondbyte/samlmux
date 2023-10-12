@@ -56,6 +56,13 @@ func (md *MetaData) IdpSsoUrl() (string, error) {
 	return md.IDPSSODescriptor.SingleSignOnServices[0].Location, nil
 }
 
+func (md *MetaData) IdpSloUrl() (string, error) {
+	if len(md.IDPSSODescriptor.SingleLogoutServices) == 0 {
+		return "", fmt.Errorf("IDP metadata seems invalid, no SSO urls found")
+	}
+	return md.IDPSSODescriptor.SingleLogoutServices[0].Location, nil
+}
+
 func (md *MetaData) IdpCertStore() (*dsig.MemoryX509CertificateStore, error) {
 	certStore := dsig.MemoryX509CertificateStore{
 		Roots: []*x509.Certificate{},

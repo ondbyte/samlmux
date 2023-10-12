@@ -164,8 +164,8 @@ func (sp *SAMLServiceProvider) buildAuthURLFromDocument(relayState, binding stri
 	}
 
 	qs := parsedUrl.Query()
-
-	qs.Add("SAMLRequest", base64.StdEncoding.EncodeToString(buf.Bytes()))
+	samlReq := base64.StdEncoding.EncodeToString(buf.Bytes())
+	qs.Add("SAMLRequest", samlReq)
 
 	if relayState != "" {
 		qs.Add("RelayState", relayState)
@@ -285,6 +285,15 @@ func (sp *SAMLServiceProvider) BuildAuthURL(relayState string) (string, error) {
 		return "", err
 	}
 	return sp.BuildAuthURLFromDocument(relayState, doc)
+}
+
+// BuildAuthURL builds redirect URL to be sent to principal
+func (sp *SAMLServiceProvider) BuildLogoutURL(relayState string, nameId, sessionIndex string) (string, error) {
+	doc, err := sp.BuildLogoutRequestDocument(nameId, sessionIndex)
+	if err != nil {
+		return "", err
+	}
+	return sp.buildLogoutURLFromDocument(relayState, BindingHttpPost, doc)
 }
 
 // AuthRedirect takes a ResponseWriter and Request from an http interaction and

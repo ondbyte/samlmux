@@ -91,7 +91,7 @@ func (sp *SAMLServiceProvider) RetrieveAssertionInfo(encodedResponse string) (*A
 
 	if attributeStatement != nil {
 		for _, attribute := range attributeStatement.Attributes {
-			assertionInfo.Values[attribute.Name] = attribute
+			assertionInfo.Values[attribute.Name] = &attribute
 		}
 	}
 

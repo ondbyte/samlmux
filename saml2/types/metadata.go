@@ -25,9 +25,9 @@ type Time struct {
 	time.Time
 }
 
-func (t Time) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+func (t Time) MarshalText() (text []byte, err error) {
 	timeStr := t.Time.Format(time.RFC3339)
-	return e.EncodeElement(timeStr, start)
+	return []byte(timeStr), nil
 }
 
 func (t *Time) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {

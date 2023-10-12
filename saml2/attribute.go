@@ -14,11 +14,40 @@
 
 package saml2
 
-import "github.com/ondbyte/samlmux/saml2/types"
+import (
+	"encoding/xml"
+
+	"github.com/ondbyte/samlmux/saml2/types"
+)
 
 // Values is a convenience wrapper for a map of strings to Attributes, which
 // can be used for easy access to the string values of Attribute lists.
-type Values map[string]types.Attribute
+type Values map[string]*types.Attribute
+
+func (v Values) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+
+	type xmlAttribute struct {
+		Name  string `xml:"name,attr"`
+		Value string `xml:"value"`
+	}
+
+	type xmlValues struct {
+		XMLName xml.Name        `xml:"values"`
+		Attrs   []*xmlAttribute `xml:"attribute"`
+	}
+
+	var xmlAttrs []*xmlAttribute
+
+	for key, attr := range v {
+		b, err := xml.Marshal(attr)
+		if err != nil {
+			return err
+		}
+		xmlAttrs = append(xmlAttrs, &xmlAttribute{Name: key, Value: string(b)})
+	}
+
+	return e.Encode(xmlValues{Attrs: xmlAttrs})
+}
 
 // Get is a safe method (nil maps will not panic) for returning the first value
 // for an attribute at a key, or the empty string if none exists.
