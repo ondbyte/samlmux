@@ -1,4 +1,4 @@
-package samlmux
+package saml_http
 
 import (
 	"crypto/x509"
@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ondbyte/samlmux/saml2/types"
+	types "github.com/russellhaering/gosaml2/types"
 	dsig "github.com/russellhaering/goxmldsig"
 )
 

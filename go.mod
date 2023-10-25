@@ -1,4 +1,4 @@
-module github.com/ondbyte/samlmux
+module github.com/ondbyte/saml_http
 
 go 1.18
 
@@ -13,5 +13,6 @@ require (
 	github.com/beevik/etree v1.1.0
 	github.com/jonboulle/clockwork v0.3.0
 	github.com/mattermost/xml-roundtrip-validator v0.1.0
+	github.com/russellhaering/gosaml2 v0.9.1
 	github.com/russellhaering/goxmldsig v1.3.0
 )
